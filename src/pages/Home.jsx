@@ -1,59 +1,66 @@
 import { useMemo, useState } from "react";
+import { MOVIES, GENRES } from "../context.jsx";
+import { useApp } from "../context.jsx";
+import MovieCard from "../components/MovieCard.jsx";
 
-export default function Home({ onGoBrowse }) {
-  const hotMovies = useMemo(
-    () => [
-      { id: 1, title: "Cô Hầu Gái", year: 2025, thumb: "" },
-      { id: 2, title: "Phim Hot 2", year: 2024, thumb: "" },
-      { id: 3, title: "Phim Hot 3", year: 2023, thumb: "" },
-      { id: 4, title: "Phim Hot 4", year: 2022, thumb: "" },
-      { id: 5, title: "Phim Hot 5", year: 2021, thumb: "" },
-    ],
+const HERO_MOVIE = MOVIES[0]; // Cô Hầu Gái as hero
+
+export default function Home({ onGoBrowse, onGoMovie }) {
+  const { toggleWishlist, isInWishlist } = useApp();
+  const [activeHot, setActiveHot] = useState(0);
+
+  const hotMovies = useMemo(() => MOVIES.slice(0, 5), []);
+  const featuredMovies = useMemo(() => MOVIES.slice(1, 7), []);
+  const heroData = hotMovies[activeHot] || HERO_MOVIE;
+
+  const genreChips = useMemo(
+    () => ["Hài Hước", "Phiêu Lưu", "Kinh Dị", "Hành Động", "Tình Cảm"],
     []
   );
 
-  const genres = useMemo(() => ["Hài Hước", "Phiêu Lưu", "Kinh Dị", "Hành Động", "Tình Cảm"], []);
-
-  const [activeHot, setActiveHot] = useState(0);
-
   return (
     <div className="home">
+      {/* HERO */}
       <section className="hero">
         <div className="container hero__inner hero2">
+          {/* Left: hero content */}
           <div className="hero__content">
-            <div className="hero__title">Cô Hầu Gái (2025)</div>
-            <div className="hero__subtitle">The Housemaid (2025)</div>
-
-            <div className="hero__meta">
-              <span className="chip chip--imdb">IMDB 7.0</span>
-              <span className="chip">2025</span>
-              <span className="chip">2h 11m</span>
-            </div>
-
-            <div className="genreRow">
-              {genres.map((g) => (
-                <button key={g} className="genreChip" onClick={onGoBrowse}>
-                  {g}
-                </button>
+            <div className="hero__badges">
+              {heroData.genres.slice(0, 2).map((g) => (
+                <span key={g} className="heroBadge">{g}</span>
               ))}
             </div>
+            <div className="hero__title">{heroData.title}</div>
+            <div className="hero__subtitle">{heroData.originalTitle} ({heroData.year})</div>
 
-            <p className="hero__desc">
-              Một thế giới hỗn loạn mở ra, nơi sự hoàn hảo chỉ là ảo giác...
-            </p>
+            <div className="hero__meta">
+              <span className="chip chip--imdb">⭐ {heroData.rating}</span>
+              <span className="chip">{heroData.year}</span>
+              <span className="chip">{heroData.duration}</span>
+            </div>
+
+            <p className="hero__desc">{heroData.desc}</p>
 
             <div className="hero__actions">
-              <button className="btnPrimary" onClick={onGoBrowse}>
+              <button className="btnPrimary" onClick={() => onGoMovie(heroData.id)}>
                 ▶ Xem ngay
               </button>
-              <button className="btnGhost">❤</button>
-              <button className="btnGhost">!</button>
+              <button
+                className={`btnGhost ${isInWishlist(heroData.id) ? "is-wishlisted" : ""}`}
+                onClick={() => toggleWishlist(heroData.id)}
+                title="Thêm vào yêu thích"
+              >
+                {isInWishlist(heroData.id) ? "❤" : "🤍"}
+              </button>
+              <button className="btnGhost" onClick={() => onGoBrowse()}>
+                ℹ
+              </button>
             </div>
           </div>
 
+          {/* Right: hot rail */}
           <div className="hotRail">
-            <div className="hotRail__label">Đang hot</div>
-
+            <div className="hotRail__label">🔥 Đang hot</div>
             <div className="hotRail__thumbs">
               {hotMovies.map((m, idx) => (
                 <button
@@ -62,48 +69,72 @@ export default function Home({ onGoBrowse }) {
                   onClick={() => setActiveHot(idx)}
                   title={`${m.title} (${m.year})`}
                 >
-                  <div className="hotThumb__img" />
+                  <img
+                    className="hotThumb__img"
+                    src={m.thumb}
+                    alt={m.title}
+                    loading="lazy"
+                  />
+                  <div className="hotThumb__title">{m.title}</div>
                 </button>
               ))}
             </div>
-
-            <div className="hotRail__hint">
-            
-            </div>
+            <div className="hotRail__hint">Nhấn để xem thêm ›</div>
           </div>
         </div>
       </section>
 
+      {/* GENRE SECTION */}
       <section className="container section">
         <div className="section__title">Bạn đang quan tâm gì?</div>
-
         <div className="topicGrid">
-          <div className="topicCard topicCard--1">
-            <div className="topicCard__name">Marvel</div>
-            <div className="topicCard__cta">Xem chủ đề →</div>
-          </div>
-          <div className="topicCard topicCard--2">
-            <div className="topicCard__name">Sitcom</div>
-            <div className="topicCard__cta">Xem chủ đề →</div>
-          </div>
-          <div className="topicCard topicCard--3">
-            <div className="topicCard__name">Lồng Tiếng Cực Mạnh</div>
-            <div className="topicCard__cta">Xem chủ đề →</div>
-          </div>
-          <div className="topicCard topicCard--4">
-            <div className="topicCard__name">Xuyên Không</div>
-            <div className="topicCard__cta">Xem chủ đề →</div>
-          </div>
-          <div className="topicCard topicCard--5">
-            <div className="topicCard__name">Cổ Trang</div>
-            <div className="topicCard__cta">Xem chủ đề →</div>
-          </div>
-          <div className="topicCard topicCard--6">
-            <div className="topicCard__name">Phim Nhức Đầu</div>
-            <div className="topicCard__cta">Xem chủ đề →</div>
-          </div>
+          {[
+            { name: "Marvel", cls: "topicCard--1", emoji: "🦸" },
+            { name: "Sitcom", cls: "topicCard--2", emoji: "😂" },
+            { name: "Lồng Tiếng", cls: "topicCard--3", emoji: "🎙️" },
+            { name: "Xuyên Không", cls: "topicCard--4", emoji: "⏳" },
+            { name: "Cổ Trang", cls: "topicCard--5", emoji: "🏯" },
+            { name: "Phim Mind-Blowing", cls: "topicCard--6", emoji: "🤯" },
+          ].map((t) => (
+            <div
+              key={t.name}
+              className={`topicCard ${t.cls}`}
+              onClick={onGoBrowse}
+            >
+              <div className="topicCard__emoji">{t.emoji}</div>
+              <div className="topicCard__name">{t.name}</div>
+              <div className="topicCard__cta">Xem chủ đề →</div>
+            </div>
+          ))}
         </div>
       </section>
+
+      {/* FEATURED MOVIES */}
+      <section className="container section">
+        <div className="sectionHeader">
+          <div className="section__title">Phim nổi bật</div>
+          <button className="seeAllBtn" onClick={onGoBrowse}>Xem tất cả →</button>
+        </div>
+        <div className="movieGrid">
+          {featuredMovies.map((movie) => (
+            <MovieCard
+              key={movie.id}
+              movie={movie}
+              onGoMovie={onGoMovie}
+              isInWishlist={isInWishlist(movie.id)}
+              onToggleWishlist={() => toggleWishlist(movie.id)}
+            />
+          ))}
+        </div>
+      </section>
+
+      {/* FOOTER */}
+      <footer className="footer">
+        <div className="container">
+          <div className="footer__brand">🎬 MOVIEHUB</div>
+          <p className="footer__copy">© 2025 MovieHub. Tất cả quyền được bảo lưu.</p>
+        </div>
+      </footer>
     </div>
   );
 }
