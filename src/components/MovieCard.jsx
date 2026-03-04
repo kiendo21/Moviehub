@@ -1,6 +1,6 @@
-import { useApp } from "../context.jsx";
-
 export default function MovieCard({ movie, onGoMovie, isInWishlist, onToggleWishlist }) {
+    if (!movie || !movie.thumb) return null;
+
     return (
         <div className="movieCard" onClick={() => onGoMovie(movie.id)}>
             <div className="movieCard__poster">
@@ -29,11 +29,10 @@ export default function MovieCard({ movie, onGoMovie, isInWishlist, onToggleWish
                 <div className="movieCard__title">{movie.title}</div>
                 <div className="movieCard__meta">
                     <span>{movie.year}</span>
-                    <span>·</span>
-                    <span>{movie.duration}</span>
+                    {movie.duration && <><span>·</span><span>{movie.duration}</span></>}
                 </div>
                 <div className="movieCard__genres">
-                    {movie.genres.slice(0, 2).map((g) => (
+                    {(movie.genres || []).slice(0, 2).map((g) => (
                         <span key={g} className="movieCard__genre">{g}</span>
                     ))}
                 </div>

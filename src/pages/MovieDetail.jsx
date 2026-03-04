@@ -1,18 +1,104 @@
-import { useMemo } from "react";
-import { MOVIES } from "../context.jsx";
+import { useState, useEffect, useCallback } from "react";
 import { useApp } from "../context.jsx";
 import MovieCard from "../components/MovieCard.jsx";
+import TrailerModal from "../components/TrailerModal.jsx";
+import { mapMovieFromList, fetchByGenre, fetchPersonMovies, fetchPersonDetail } from "../tmdb.js";
 
-export default function MovieDetail({ movieId, onGoBack, onGoMovie }) {
-    const { toggleWishlist, isInWishlist } = useApp();
-    const movie = MOVIES.find((m) => m.id === movieId);
+export default function MovieDetail({ movieId, onGoBack, onGoMovie, onGoPerson }) {
+    const { toggleWishlist, isInWishlist, genreMap } = useApp();
+    const [movie, setMovie] = useState(null);
+    const [related, setRelated] = useState([]);
+    const [sameGenre, setSameGenre] = useState([]);
+    const [activeGenres, setActiveGenres] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [genreLoading, setGenreLoading] = useState(false);
+    const [isTrailerOpen, setIsTrailerOpen] = useState(false);
+    const { fetchMovieDetail } = useApp();
 
-    const related = useMemo(() => {
-        if (!movie) return [];
-        return MOVIES.filter(
-            (m) => m.id !== movie.id && m.genres.some((g) => movie.genres.includes(g))
-        ).slice(0, 4);
-    }, [movie]);
+    // Fetch movie detail
+    useEffect(() => {
+        let cancelled = false;
+        (async () => {
+            setLoading(true);
+            try {
+                const data = await fetchMovieDetail(movieId);
+                if (cancelled) return;
+                setMovie(data);
+
+                // Set all genres as active by default
+                const genreIds = (data.genreDetails || []).map((g) => g.id);
+                setActiveGenres(genreIds);
+
+                // Map recommendations
+                const recs = (data.recommendations || [])
+                    .map((m) => mapMovieFromList(m, genreMap))
+                    .filter((m) => m.thumb)
+                    .slice(0, 6);
+                setRelated(recs);
+
+                // Fetch same-genre movies using all genre IDs
+                if (genreIds.length > 0) {
+                    const genreData = await fetchByGenre(genreIds.join(","));
+                    if (!cancelled) {
+                        const genreMovies = (genreData.results || [])
+                            .filter((m) => m.id !== movieId)
+                            .map((m) => mapMovieFromList(m, genreMap))
+                            .filter((m) => m.thumb)
+                            .filter((m) => !recs.find((r) => r.id === m.id))
+                            .slice(0, 12);
+                        setSameGenre(genreMovies);
+                    }
+                }
+            } catch (err) {
+                console.error("Detail fetch error:", err);
+            } finally {
+                if (!cancelled) setLoading(false);
+            }
+        })();
+        return () => { cancelled = true; };
+    }, [movieId, fetchMovieDetail, genreMap]);
+
+    // Scroll to top when movieId changes
+    useEffect(() => {
+        window.scrollTo(0, 0);
+    }, [movieId]);
+
+    // Re-fetch when active genres change (user toggles)
+    const handleGenreToggle = useCallback(async (genreId) => {
+        if (!movie) return;
+        const newActive = activeGenres.includes(genreId)
+            ? activeGenres.filter((id) => id !== genreId)
+            : [...activeGenres, genreId];
+
+        // Must keep at least one genre
+        if (newActive.length === 0) return;
+        setActiveGenres(newActive);
+
+        setGenreLoading(true);
+        try {
+            const genreData = await fetchByGenre(newActive.join(","));
+            const genreMovies = (genreData.results || [])
+                .filter((m) => m.id !== movieId)
+                .map((m) => mapMovieFromList(m, genreMap))
+                .filter((m) => m.thumb)
+                .filter((m) => !related.find((r) => r.id === m.id))
+                .slice(0, 12);
+            setSameGenre(genreMovies);
+        } catch (err) {
+            console.error(err);
+        } finally {
+            setGenreLoading(false);
+        }
+    }, [movie, activeGenres, movieId, genreMap, related]);
+
+    if (loading) {
+        return (
+            <div className="container browsePage" style={{ textAlign: "center", padding: "80px 20px" }}>
+                <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
+                <div style={{ fontSize: 20, fontWeight: 700 }}>Đang tải thông tin phim...</div>
+            </div>
+        );
+    }
 
     if (!movie) {
         return (
@@ -36,59 +122,95 @@ export default function MovieDetail({ movieId, onGoBack, onGoMovie }) {
             </div>
 
             <div className="container detailContent">
-                {/* Back button */}
-                <button className="backBtn" onClick={onGoBack}>
-                    ← Quay lại
-                </button>
+                <button className="backBtn" onClick={onGoBack}>← Quay lại</button>
 
                 <div className="detailHero">
-                    {/* Poster */}
                     <div className="detailPoster">
-                        <img src={movie.thumb} alt={movie.title} />
+                        {movie.thumb && <img src={movie.thumb} alt={movie.title} />}
                     </div>
 
-                    {/* Info */}
                     <div className="detailInfo">
                         <div className="detailInfo__genres">
-                            {movie.genres.map((g) => (
+                            {(movie.genres || []).map((g) => (
                                 <span key={g} className="heroBadge">{g}</span>
                             ))}
                         </div>
 
                         <h1 className="detailInfo__title">{movie.title}</h1>
                         <div className="detailInfo__original">{movie.originalTitle}</div>
+                        {movie.tagline && (
+                            <div style={{ color: "rgba(232,232,234,0.5)", fontStyle: "italic", marginBottom: 12 }}>
+                                "{movie.tagline}"
+                            </div>
+                        )}
 
                         <div className="detailInfo__meta">
                             <span className="chip chip--imdb">⭐ {movie.rating}/10</span>
                             <span className="chip">{movie.year}</span>
-                            <span className="chip">{movie.duration}</span>
+                            {movie.duration && <span className="chip">{movie.duration}</span>}
                         </div>
 
                         <p className="detailInfo__desc">{movie.desc}</p>
 
-                        <div className="detailInfo__cast">
-                            <span className="detailInfo__castLabel">Diễn viên:</span>
-                            {movie.cast.join(", ")}
-                        </div>
-
                         <div className="detailInfo__actions">
-                            <button className="btnPrimary btnPrimary--lg">
-                                ▶ Xem ngay
-                            </button>
+                            <button className="btnPrimary btnPrimary--lg">▶ Xem ngay</button>
+                            {movie.trailerKey && (
+                                <button
+                                    className="btnPrimary btnPrimary--lg btnTrailer"
+                                    style={{ background: "rgba(255,255,255,0.1)", color: "#fff" }}
+                                    onClick={() => setIsTrailerOpen(true)}
+                                >
+                                    🎬 Trailer
+                                </button>
+                            )}
                             <button
                                 className={`btnGhost btnGhost--lg ${inWishlist ? "is-wishlisted" : ""}`}
-                                onClick={() => toggleWishlist(movie.id)}
+                                onClick={() => toggleWishlist(movie)}
                             >
                                 {inWishlist ? "❤ Đã yêu thích" : "🤍 Yêu thích"}
                             </button>
-                            <button className="btnGhost btnGhost--lg">
-                                📤 Chia sẻ
-                            </button>
+                            <button className="btnGhost btnGhost--lg">📤 Chia sẻ</button>
                         </div>
                     </div>
                 </div>
 
-                {/* Related movies */}
+                <TrailerModal
+                    trailerKey={movie.trailerKey}
+                    isOpen={isTrailerOpen}
+                    onClose={() => setIsTrailerOpen(false)}
+                />
+
+                {/* ─── Cast Section ─────────────────────────── */}
+                {movie.castFull && movie.castFull.length > 0 && (
+                    <section className="section">
+                        <div className="section__title">Dàn diễn viên</div>
+                        <div className="castGrid">
+                            {movie.castFull.map((actor) => (
+                                <button
+                                    key={actor.id}
+                                    className="castCard"
+                                    onClick={() => onGoPerson(actor.id)}
+                                    title={`Xem thông tin ${actor.name}`}
+                                >
+                                    <div className="castCard__photo">
+                                        {actor.photo
+                                            ? <img src={actor.photo} alt={actor.name} loading="lazy" />
+                                            : <div className="castCard__placeholder">👤</div>
+                                        }
+                                    </div>
+                                    <div className="castCard__info">
+                                        <div className="castCard__name">{actor.name}</div>
+                                        {actor.character && (
+                                            <div className="castCard__char">{actor.character}</div>
+                                        )}
+                                    </div>
+                                </button>
+                            ))}
+                        </div>
+                    </section>
+                )}
+
+                {/* ─── Recommended Movies ──────────────────── */}
                 {related.length > 0 && (
                     <section className="section">
                         <div className="section__title">Phim tương tự</div>
@@ -99,10 +221,46 @@ export default function MovieDetail({ movieId, onGoBack, onGoMovie }) {
                                     movie={m}
                                     onGoMovie={onGoMovie}
                                     isInWishlist={isInWishlist(m.id)}
-                                    onToggleWishlist={() => toggleWishlist(m.id)}
+                                    onToggleWishlist={() => toggleWishlist(m)}
                                 />
                             ))}
                         </div>
+                    </section>
+                )}
+
+                {/* ─── Same Genre with Toggles ─────────────── */}
+                {movie.genreDetails && movie.genreDetails.length > 0 && (
+                    <section className="section">
+                        <div className="section__title">Cùng thể loại</div>
+                        <div className="genreToggleRow">
+                            {movie.genreDetails.map((g) => (
+                                <button
+                                    key={g.id}
+                                    className={`genreToggle ${activeGenres.includes(g.id) ? "is-active" : ""}`}
+                                    onClick={() => handleGenreToggle(g.id)}
+                                >
+                                    {g.name}
+                                    {activeGenres.includes(g.id) && <span className="genreToggle__x">✕</span>}
+                                </button>
+                            ))}
+                        </div>
+                        {genreLoading ? (
+                            <div style={{ padding: "30px", textAlign: "center", color: "rgba(232,232,234,0.5)" }}>Đang tải...</div>
+                        ) : sameGenre.length > 0 ? (
+                            <div className="movieGrid">
+                                {sameGenre.map((m) => (
+                                    <MovieCard
+                                        key={m.id}
+                                        movie={m}
+                                        onGoMovie={onGoMovie}
+                                        isInWishlist={isInWishlist(m.id)}
+                                        onToggleWishlist={() => toggleWishlist(m)}
+                                    />
+                                ))}
+                            </div>
+                        ) : (
+                            <div style={{ padding: "30px", textAlign: "center", color: "rgba(232,232,234,0.5)" }}>Không tìm thấy phim cho thể loại đã chọn</div>
+                        )}
                     </section>
                 )}
             </div>

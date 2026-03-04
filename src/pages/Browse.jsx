@@ -1,40 +1,120 @@
-import { useState, useMemo } from "react";
-import { MOVIES, GENRES } from "../context.jsx";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context.jsx";
 import MovieCard from "../components/MovieCard.jsx";
+import { searchPerson, fetchPersonMovies, mapMovieFromList } from "../tmdb.js";
 
 export default function Browse({ onGoMovie }) {
-  const { toggleWishlist, isInWishlist } = useApp();
+  const { popular, genreList, genreMap, toggleWishlist, isInWishlist, searchMovies, fetchByGenre } = useApp();
+
+  const [movies, setMovies] = useState([]);
   const [search, setSearch] = useState("");
-  const [activeGenre, setActiveGenre] = useState("Tất Cả");
-  const [sort, setSort] = useState("rating");
+  const [activeGenres, setActiveGenres] = useState([]); // Array of genre IDs
+  const [sort, setSort] = useState("popularity");
+  const [loading, setLoading] = useState(false);
+  const [searchLabel, setSearchLabel] = useState("");
+  const debounceRef = useRef(null);
 
-  const filtered = useMemo(() => {
-    let list = [...MOVIES];
+  // Init with popular movies
+  useEffect(() => {
+    if (popular.length > 0 && movies.length === 0 && !search && activeGenres.length === 0) {
+      setMovies(popular);
+    }
+  }, [popular]);
 
-    // Filter by genre
-    if (activeGenre !== "Tất Cả") {
-      list = list.filter((m) => m.genres.includes(activeGenre));
+  // Search with debounce — search movies AND actors
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+
+    if (!search.trim()) {
+      setSearchLabel("");
+      if (activeGenres.length === 0) {
+        setMovies(popular);
+      } else {
+        loadByGenre(activeGenres);
+      }
+      return;
     }
 
-    // Filter by search
-    if (search.trim()) {
-      const q = search.toLowerCase();
-      list = list.filter(
-        (m) =>
-          m.title.toLowerCase().includes(q) ||
-          m.originalTitle.toLowerCase().includes(q) ||
-          m.cast.some((c) => c.toLowerCase().includes(q))
-      );
+    debounceRef.current = setTimeout(async () => {
+      setLoading(true);
+      setSearchLabel("");
+      try {
+        // Search movies by title
+        const movieData = await searchMovies(search);
+        let results = movieData.results || [];
+
+        // Also search by actor name
+        const persons = await searchPerson(search);
+        if (persons.length > 0) {
+          // Get movies for the top matched actor
+          const topPerson = persons[0];
+          const personMoviesRaw = await fetchPersonMovies(topPerson.id);
+          const personMovies = personMoviesRaw
+            .map((m) => mapMovieFromList(m, genreMap))
+            .filter((m) => m.thumb);
+
+          // Merge: movie results first, then actor movies (deduplicate)
+          const existingIds = new Set(results.map((m) => m.id));
+          const extra = personMovies.filter((m) => !existingIds.has(m.id));
+          results = [...results, ...extra];
+
+          if (movieData.results.length === 0 && extra.length > 0) {
+            setSearchLabel(`Phim có "${topPerson.name}"`);
+          }
+        }
+
+        setMovies(results);
+      } catch (e) {
+        console.error(e);
+      } finally {
+        setLoading(false);
+      }
+    }, 500);
+
+    return () => clearTimeout(debounceRef.current);
+  }, [search]);
+
+  // Genre filter
+  const loadByGenre = useCallback(async (genreIds) => {
+    if (!genreIds || genreIds.length === 0) {
+      setMovies(popular);
+      return;
+    }
+    setLoading(true);
+    try {
+      // TMDB discover supports comma-separated genre IDs
+      const data = await fetchByGenre(genreIds.join(","));
+      setMovies(data.results);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  }, [popular, fetchByGenre]);
+
+  const handleGenreClick = (genreId) => {
+    setSearch("");
+    if (genreId === 0) {
+      setActiveGenres([]);
+      setMovies(popular);
+      return;
     }
 
-    // Sort
-    if (sort === "rating") list.sort((a, b) => b.rating - a.rating);
-    else if (sort === "year") list.sort((a, b) => b.year - a.year);
-    else if (sort === "title") list.sort((a, b) => a.title.localeCompare(b.title, "vi"));
+    const newGenres = activeGenres.includes(genreId)
+      ? activeGenres.filter((id) => id !== genreId)
+      : [...activeGenres, genreId];
 
-    return list;
-  }, [search, activeGenre, sort]);
+    setActiveGenres(newGenres);
+    loadByGenre(newGenres);
+  };
+
+  // Sort
+  const sortedMovies = [...movies].sort((a, b) => {
+    if (sort === "rating") return b.rating - a.rating;
+    if (sort === "year") return (b.year || 0) - (a.year || 0);
+    if (sort === "title") return (a.title || "").localeCompare(b.title || "", "vi");
+    return b.popularity - a.popularity; // default
+  });
 
   return (
     <div className="browsePage">
@@ -42,8 +122,15 @@ export default function Browse({ onGoMovie }) {
         {/* Header */}
         <div className="browseHeader">
           <h1 className="browseTitle">Danh sách phim</h1>
-          <p className="browseSubtitle">{filtered.length} bộ phim</p>
+          <p className="browseSubtitle">{sortedMovies.length} bộ phim</p>
         </div>
+
+        {searchLabel && (
+          <div className="searchLabel">
+            <span className="searchLabel__text">{searchLabel}</span>
+            <button className="searchLabel__clear" onClick={() => { setSearch(""); setSearchLabel(""); }}>✕</button>
+          </div>
+        )}
 
         {/* Search bar */}
         <div className="browseSearch">
@@ -65,15 +152,25 @@ export default function Browse({ onGoMovie }) {
         <div className="browseControls">
           {/* Genre filter */}
           <div className="genreFilter">
-            {GENRES.map((g) => (
-              <button
-                key={g}
-                className={`genreFilterBtn ${activeGenre === g ? "is-active" : ""}`}
-                onClick={() => setActiveGenre(g)}
-              >
-                {g}
-              </button>
-            ))}
+            <button
+              className={`genreFilterBtn ${activeGenres.length === 0 ? "is-active" : ""}`}
+              onClick={() => handleGenreClick(0)}
+            >
+              Tất Cả
+            </button>
+            {genreList.map((g) => {
+              const isActive = activeGenres.includes(g.id);
+              return (
+                <button
+                  key={g.id}
+                  className={`genreFilterBtn ${isActive ? "is-active" : ""}`}
+                  onClick={() => handleGenreClick(g.id)}
+                >
+                  {g.name}
+                  {isActive && <span className="genreFilterBtn__x">✕</span>}
+                </button>
+              );
+            })}
           </div>
 
           {/* Sort */}
@@ -84,6 +181,7 @@ export default function Browse({ onGoMovie }) {
               value={sort}
               onChange={(e) => setSort(e.target.value)}
             >
+              <option value="popularity">Phổ biến nhất</option>
               <option value="rating">Điểm cao nhất</option>
               <option value="year">Mới nhất</option>
               <option value="title">Tên A-Z</option>
@@ -92,15 +190,20 @@ export default function Browse({ onGoMovie }) {
         </div>
 
         {/* Results */}
-        {filtered.length > 0 ? (
+        {loading ? (
+          <div className="emptyState">
+            <div className="emptyState__icon">⏳</div>
+            <div className="emptyState__title">Đang tải phim...</div>
+          </div>
+        ) : sortedMovies.length > 0 ? (
           <div className="movieGrid movieGrid--browse">
-            {filtered.map((movie) => (
+            {sortedMovies.map((movie) => (
               <MovieCard
                 key={movie.id}
                 movie={movie}
                 onGoMovie={onGoMovie}
                 isInWishlist={isInWishlist(movie.id)}
-                onToggleWishlist={() => toggleWishlist(movie.id)}
+                onToggleWishlist={() => toggleWishlist(movie)}
               />
             ))}
           </div>
@@ -111,7 +214,7 @@ export default function Browse({ onGoMovie }) {
             <p className="emptyState__desc">Thử tìm kiếm với từ khóa khác hoặc đổi thể loại</p>
             <button
               className="btnPrimary"
-              onClick={() => { setSearch(""); setActiveGenre("Tất Cả"); }}
+              onClick={() => { setSearch(""); handleGenreClick(0); }}
             >
               Xóa bộ lọc
             </button>

@@ -1,28 +1,77 @@
-import { useMemo, useState } from "react";
-import { MOVIES, GENRES } from "../context.jsx";
+import { useState, useEffect } from "react";
 import { useApp } from "../context.jsx";
 import MovieCard from "../components/MovieCard.jsx";
-
-const HERO_MOVIE = MOVIES[0]; // Cô Hầu Gái as hero
+import TrailerModal from "../components/TrailerModal.jsx";
+import { mapMovieFromList } from "../tmdb.js";
 
 export default function Home({ onGoBrowse, onGoMovie }) {
-  const { toggleWishlist, isInWishlist } = useApp();
+  const {
+    trending, popular, toggleWishlist, isInWishlist, loading: appLoading,
+    fetchTrendingDay, fetchTrendingWeek, genreMap, fetchMovieDetail
+  } = useApp();
+
   const [activeHot, setActiveHot] = useState(0);
+  const [hotMoviesDetailed, setHotMoviesDetailed] = useState([]);
+  const [topMovies, setTopMovies] = useState([]);
+  const [topTV, setTopTV] = useState([]);
+  const [weeklyFavorites, setWeeklyFavorites] = useState([]);
+  const [localLoading, setLocalLoading] = useState(true);
+  const [isTrailerOpen, setIsTrailerOpen] = useState(false);
 
-  const hotMovies = useMemo(() => MOVIES.slice(0, 5), []);
-  const featuredMovies = useMemo(() => MOVIES.slice(1, 7), []);
-  const heroData = hotMovies[activeHot] || HERO_MOVIE;
+  const hotMovies = hotMoviesDetailed.length > 0 ? hotMoviesDetailed : trending.slice(0, 5);
+  const featuredMovies = popular.slice(0, 6);
+  const heroData = hotMovies[activeHot] || hotMovies[0];
 
-  const genreChips = useMemo(
-    () => ["Hài Hước", "Phiêu Lưu", "Kinh Dị", "Hành Động", "Tình Cảm"],
-    []
-  );
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        setLocalLoading(true);
+        // Fetch detailed data for hot movies to get trailers & durations
+        const trendingSlice = trending.slice(0, 5);
+
+        const [movDay, tvDay, weekTrend, hotDetails] = await Promise.all([
+          fetchTrendingDay("movie"),
+          fetchTrendingDay("tv"),
+          fetchTrendingWeek("movie"),
+          Promise.all(trendingSlice.map(m => fetchMovieDetail(m.id)))
+        ]);
+
+        if (cancelled) return;
+
+        setHotMoviesDetailed(hotDetails);
+        setTopMovies(movDay.results.slice(0, 10).map(m => mapMovieFromList(m, genreMap)));
+        setTopTV(tvDay.results.slice(0, 10).map(m => mapMovieFromList(m, genreMap)));
+        setWeeklyFavorites(weekTrend.results.slice(0, 5).map(m => mapMovieFromList(m, genreMap)));
+      } catch (err) {
+        console.error("Home extra fetch error:", err);
+      } finally {
+        if (!cancelled) setLocalLoading(false);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [fetchTrendingDay, fetchTrendingWeek, genreMap, trending, fetchMovieDetail]);
+
+  if (appLoading || !heroData) {
+    return (
+      <div className="home">
+        <div className="container page" style={{ textAlign: "center", padding: "80px 20px" }}>
+          <div style={{ fontSize: 48, marginBottom: 16 }}>🎬</div>
+          <div style={{ fontSize: 20, fontWeight: 700 }}>Đang tải dữ liệu phim...</div>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="home">
       {/* HERO */}
       <section className="hero">
         <div className="container hero__inner hero2">
+          {/* Backdrop image behind text */}
+          {heroData.backdrop && (
+            <div className="hero__backdrop" style={{ backgroundImage: `url(${heroData.backdrop})` }} />
+          )}
           {/* Left: hero content */}
           <div className="hero__content">
             <div className="hero__badges">
@@ -36,7 +85,7 @@ export default function Home({ onGoBrowse, onGoMovie }) {
             <div className="hero__meta">
               <span className="chip chip--imdb">⭐ {heroData.rating}</span>
               <span className="chip">{heroData.year}</span>
-              <span className="chip">{heroData.duration}</span>
+              {heroData.duration && <span className="chip">{heroData.duration}</span>}
             </div>
 
             <p className="hero__desc">{heroData.desc}</p>
@@ -45,18 +94,33 @@ export default function Home({ onGoBrowse, onGoMovie }) {
               <button className="btnPrimary" onClick={() => onGoMovie(heroData.id)}>
                 ▶ Xem ngay
               </button>
+              {heroData.trailerKey && (
+                <button
+                  className="btnPrimary btnTrailer"
+                  style={{ background: "rgba(255,255,255,0.1)", color: "#fff" }}
+                  onClick={() => setIsTrailerOpen(true)}
+                >
+                  🎬 Trailer
+                </button>
+              )}
               <button
                 className={`btnGhost ${isInWishlist(heroData.id) ? "is-wishlisted" : ""}`}
-                onClick={() => toggleWishlist(heroData.id)}
+                onClick={() => toggleWishlist(heroData)}
                 title="Thêm vào yêu thích"
               >
                 {isInWishlist(heroData.id) ? "❤" : "🤍"}
               </button>
-              <button className="btnGhost" onClick={() => onGoBrowse()}>
+              <button className="btnGhost" onClick={() => onGoMovie(heroData.id)}>
                 ℹ
               </button>
             </div>
           </div>
+
+          <TrailerModal
+            trailerKey={heroData.trailerKey}
+            isOpen={isTrailerOpen}
+            onClose={() => setIsTrailerOpen(false)}
+          />
 
           {/* Right: hot rail */}
           <div className="hotRail">
@@ -69,12 +133,9 @@ export default function Home({ onGoBrowse, onGoMovie }) {
                   onClick={() => setActiveHot(idx)}
                   title={`${m.title} (${m.year})`}
                 >
-                  <img
-                    className="hotThumb__img"
-                    src={m.thumb}
-                    alt={m.title}
-                    loading="lazy"
-                  />
+                  {m.thumb && (
+                    <img className="hotThumb__img" src={m.thumb} alt={m.title} loading="lazy" />
+                  )}
                   <div className="hotThumb__title">{m.title}</div>
                 </button>
               ))}
@@ -84,32 +145,7 @@ export default function Home({ onGoBrowse, onGoMovie }) {
         </div>
       </section>
 
-      {/* GENRE SECTION */}
-      <section className="container section">
-        <div className="section__title">Bạn đang quan tâm gì?</div>
-        <div className="topicGrid">
-          {[
-            { name: "Marvel", cls: "topicCard--1", emoji: "🦸" },
-            { name: "Sitcom", cls: "topicCard--2", emoji: "😂" },
-            { name: "Lồng Tiếng", cls: "topicCard--3", emoji: "🎙️" },
-            { name: "Xuyên Không", cls: "topicCard--4", emoji: "⏳" },
-            { name: "Cổ Trang", cls: "topicCard--5", emoji: "🏯" },
-            { name: "Phim Mind-Blowing", cls: "topicCard--6", emoji: "🤯" },
-          ].map((t) => (
-            <div
-              key={t.name}
-              className={`topicCard ${t.cls}`}
-              onClick={onGoBrowse}
-            >
-              <div className="topicCard__emoji">{t.emoji}</div>
-              <div className="topicCard__name">{t.name}</div>
-              <div className="topicCard__cta">Xem chủ đề →</div>
-            </div>
-          ))}
-        </div>
-      </section>
-
-      {/* FEATURED MOVIES */}
+      {/* FEATURED MOVIES (Moved up) */}
       <section className="container section">
         <div className="sectionHeader">
           <div className="section__title">Phim nổi bật</div>
@@ -122,9 +158,78 @@ export default function Home({ onGoBrowse, onGoMovie }) {
               movie={movie}
               onGoMovie={onGoMovie}
               isInWishlist={isInWishlist(movie.id)}
-              onToggleWishlist={() => toggleWishlist(movie.id)}
+              onToggleWishlist={() => toggleWishlist(movie)}
             />
           ))}
+        </div>
+      </section>
+
+      {/* TOP 10 MOVIES */}
+      <section className="container section">
+        <div className="sectionHeader">
+          <div className="section__title">Top 10 phim lẻ trong ngày</div>
+        </div>
+        <div className="topTenGrid">
+          {topMovies.map((m, idx) => (
+            <div key={m.id} className="topTenCard" onClick={() => onGoMovie(m.id)}>
+              <div className="topTenCard__rank">{idx + 1}</div>
+              <div className="topTenCard__inner">
+                <img src={m.thumb} alt={m.title} className="topTenCard__img" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* TOP 10 TV SHOWS */}
+      <section className="container section">
+        <div className="sectionHeader">
+          <div className="section__title">Top 10 phim bộ trong ngày</div>
+        </div>
+        <div className="topTenGrid">
+          {topTV.map((m, idx) => (
+            <div key={m.id} className="topTenCard" onClick={() => onGoMovie(m.id)}>
+              <div className="topTenCard__rank">{idx + 1}</div>
+              <div className="topTenCard__inner">
+                <img src={m.thumb} alt={m.title} className="topTenCard__img" />
+              </div>
+            </div>
+          ))}
+        </div>
+      </section>
+
+      {/* DASHBOARD CHART SECTION */}
+      <section className="container section chartSection">
+        <div className="chartCols chartCols--2">
+          {/* Column 1: Sôi nổi nhất */}
+          <div className="chartCol">
+            <h3 className="chartCol__title">🎬 SÔI NỔI NHẤT</h3>
+            <div className="chartList">
+              {popular.slice(0, 5).map((m, idx) => (
+                <div key={m.id} className="chartItem" onClick={() => onGoMovie(m.id)}>
+                  <span className="chartItem__rank">{idx + 1}.</span>
+                  <img src={m.thumb} alt="" className="chartItem__thumb" />
+                  <span className="chartItem__name">{m.title}</span>
+                </div>
+              ))}
+            </div>
+            <button className="seeMoreBtn" onClick={onGoBrowse}>Xem thêm</button>
+          </div>
+
+          {/* Column 2: Yêu thích tuần */}
+          <div className="chartCol">
+            <h3 className="chartCol__title">❤ YÊU THÍCH TUẦN</h3>
+            <div className="chartList">
+              {weeklyFavorites.map((m, idx) => (
+                <div key={m.id} className="chartItem" onClick={() => onGoMovie(m.id)}>
+                  <span className="chartItem__rank">{idx + 1}.</span>
+                  <img src={m.thumb} alt="" className="chartItem__thumb" />
+                  <span className="chartItem__name">{m.title}</span>
+                </div>
+              ))}
+            </div>
+            <button className="seeMoreBtn" onClick={onGoBrowse}>Xem thêm</button>
+          </div>
         </div>
       </section>
 
@@ -132,7 +237,7 @@ export default function Home({ onGoBrowse, onGoMovie }) {
       <footer className="footer">
         <div className="container">
           <div className="footer__brand">🎬 MOVIEHUB</div>
-          <p className="footer__copy">© 2025 MovieHub. Tất cả quyền được bảo lưu.</p>
+          <p className="footer__copy">© 2025 MovieHub. Dữ liệu phim từ TMDB.</p>
         </div>
       </footer>
     </div>
