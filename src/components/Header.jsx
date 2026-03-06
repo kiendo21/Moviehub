@@ -7,7 +7,7 @@ export default function Header({ tab, onChangeTab }) {
     <header className="topbar">
       <div className="container topbar__inner headerSimple">
         <div className="brand brand--red" onClick={() => onChangeTab("home")}>
-          🎬 MOVIEHUB
+          MOVIEHUB
         </div>
 
         <div className="searchRect" onClick={() => onChangeTab("browse")} role="button">
