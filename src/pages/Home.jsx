@@ -34,15 +34,15 @@ export default function Home({ onGoBrowse, onGoMovie }) {
           fetchTrendingDay("movie"),
           fetchTrendingDay("tv"),
           fetchTrendingWeek("movie"),
-          Promise.all(trendingSlice.map(m => fetchMovieDetail(m.id)))
+          Promise.all(trendingSlice.map(m => fetchMovieDetail(m.id, m.mediaType)))
         ]);
 
         if (cancelled) return;
 
         setHotMoviesDetailed(hotDetails);
-        setTopMovies(movDay.results.slice(0, 10).map(m => mapMovieFromList(m, genreMap)));
-        setTopTV(tvDay.results.slice(0, 10).map(m => mapMovieFromList(m, genreMap)));
-        setWeeklyFavorites(weekTrend.results.slice(0, 5).map(m => mapMovieFromList(m, genreMap)));
+        setTopMovies((movDay.results || []).slice(0, 10).map(m => ({ ...mapMovieFromList(m, genreMap), mediaType: "movie" })));
+        setTopTV((tvDay.results || []).slice(0, 10).map(m => ({ ...mapMovieFromList(m, genreMap), mediaType: "tv" })));
+        setWeeklyFavorites((weekTrend.results || []).slice(0, 5).map(m => mapMovieFromList(m, genreMap)));
       } catch (err) {
         console.error("Home extra fetch error:", err);
       } finally {
@@ -51,6 +51,16 @@ export default function Home({ onGoBrowse, onGoMovie }) {
     })();
     return () => { cancelled = true; };
   }, [fetchTrendingDay, fetchTrendingWeek, genreMap, trending, fetchMovieDetail]);
+
+  useEffect(() => {
+    if (hotMovies.length === 0 || isTrailerOpen) return;
+
+    const timer = setInterval(() => {
+      setActiveHot((prev) => (prev + 1) % hotMovies.length);
+    }, 5000);
+
+    return () => clearInterval(timer);
+  }, [hotMovies.length, isTrailerOpen]);
 
   if (appLoading || !heroData) {
     return (
@@ -140,7 +150,6 @@ export default function Home({ onGoBrowse, onGoMovie }) {
                 </button>
               ))}
             </div>
-            <div className="hotRail__hint">Nhấn để xem thêm ›</div>
           </div>
         </div>
       </section>
@@ -169,15 +178,31 @@ export default function Home({ onGoBrowse, onGoMovie }) {
         <div className="sectionHeader">
           <div className="section__title">Top 10 phim lẻ trong ngày</div>
         </div>
-        <div className="topTenGrid">
-          {topMovies.map((m, idx) => (
-            <div key={m.id} className="topTenCard" onClick={() => onGoMovie(m.id)}>
-              <div className="topTenCard__rank">{idx + 1}</div>
-              <div className="topTenCard__inner">
-                <img src={m.thumb} alt={m.title} className="topTenCard__img" />
-              </div>
+        <div className="topTenSlider">
+          <div className="topTenTrack">
+            {/* Set 1 */}
+            <div className="topTenSet">
+              {topMovies.map((m, idx) => (
+                <div key={m.id} className="topTenCard" onClick={() => onGoMovie(m.id, m.mediaType)}>
+                  <div className="topTenCard__rank">{idx + 1}</div>
+                  <div className="topTenCard__inner">
+                    <img src={m.thumb} alt={m.title} className="topTenCard__img" />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+            {/* Set 2 (Duplicate for infinite scroll) */}
+            <div className="topTenSet">
+              {topMovies.map((m, idx) => (
+                <div key={`dup-${m.id}`} className="topTenCard" onClick={() => onGoMovie(m.id, m.mediaType)}>
+                  <div className="topTenCard__rank">{idx + 1}</div>
+                  <div className="topTenCard__inner">
+                    <img src={m.thumb} alt={m.title} className="topTenCard__img" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 
@@ -186,15 +211,31 @@ export default function Home({ onGoBrowse, onGoMovie }) {
         <div className="sectionHeader">
           <div className="section__title">Top 10 phim bộ trong ngày</div>
         </div>
-        <div className="topTenGrid">
-          {topTV.map((m, idx) => (
-            <div key={m.id} className="topTenCard" onClick={() => onGoMovie(m.id)}>
-              <div className="topTenCard__rank">{idx + 1}</div>
-              <div className="topTenCard__inner">
-                <img src={m.thumb} alt={m.title} className="topTenCard__img" />
-              </div>
+        <div className="topTenSlider">
+          <div className="topTenTrack">
+            {/* Set 1 */}
+            <div className="topTenSet">
+              {topTV.map((m, idx) => (
+                <div key={m.id} className="topTenCard" onClick={() => onGoMovie(m.id, m.mediaType)}>
+                  <div className="topTenCard__rank">{idx + 1}</div>
+                  <div className="topTenCard__inner">
+                    <img src={m.thumb} alt={m.title} className="topTenCard__img" />
+                  </div>
+                </div>
+              ))}
             </div>
-          ))}
+            {/* Set 2 (Duplicate for infinite scroll) */}
+            <div className="topTenSet">
+              {topTV.map((m, idx) => (
+                <div key={`dup-${m.id}`} className="topTenCard" onClick={() => onGoMovie(m.id, m.mediaType)}>
+                  <div className="topTenCard__rank">{idx + 1}</div>
+                  <div className="topTenCard__inner">
+                    <img src={m.thumb} alt={m.title} className="topTenCard__img" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
         </div>
       </section>
 

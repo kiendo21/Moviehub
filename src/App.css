@@ -5,7 +5,7 @@
 }
 
 .container {
-  width: min(1200px, calc(100% - 32px));
+  width: min(1600px, calc(100% - 48px));
   margin: 0 auto;
 }
 
@@ -1753,17 +1753,40 @@
   }
 }
 
-/* ─── Top 10 Section ─── */
-.topTenGrid {
-  display: flex;
-  overflow-x: auto;
-  gap: 24px;
+/* ─── Top 10 Section (Infinite Scroll) ─── */
+.topTenSlider {
+  overflow: hidden;
+  width: 100%;
   padding: 20px 0 40px;
-  scrollbar-width: none;
 }
 
-.topTenGrid::-webkit-scrollbar {
-  display: none;
+.topTenTrack {
+  display: flex;
+  width: max-content;
+  animation: scrollTrack 40s linear infinite;
+  /* Hover effects on track: pause animation */
+}
+
+.topTenTrack:hover {
+  animation-play-state: paused;
+}
+
+@keyframes scrollTrack {
+  0% {
+    transform: translateX(0);
+  }
+
+  /* Since there are two exactly equal sets, -50% shifts by exactly one set */
+  100% {
+    transform: translateX(-50%);
+  }
+}
+
+.topTenSet {
+  display: flex;
+  gap: 24px;
+  /* padding right equals gap to keep spacing consistent between end of set 1 and start of set 2 */
+  padding-right: 24px;
 }
 
 .topTenCard {

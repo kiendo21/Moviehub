@@ -6,6 +6,7 @@ import {
   fetchTrendingWeek,
   fetchPopular,
   fetchMovieDetail as fetchDetail,
+  fetchTVDetail,
   searchMovies as searchApi,
   fetchByGenre as discoverApi,
   mapMovieFromList,
@@ -34,7 +35,7 @@ export function AppProvider({ children }) {
         setLoading(true);
         const [genres, trendRaw, popRaw] = await Promise.all([
           fetchGenres(),
-          fetchTrending(),
+          fetchTrending("all", "day"), // Mixed movie & tv for Hero/Hot
           fetchPopular(),
         ]);
 
@@ -76,7 +77,8 @@ export function AppProvider({ children }) {
   }, [genreMap]);
 
   // ─── movie detail ─────────────────────────────────────
-  const fetchMovieDetail = useCallback(async (id) => {
+  const fetchMovieDetail = useCallback(async (id, type = "movie") => {
+    if (type === "tv") return fetchTVDetail(id);
     return fetchDetail(id);
   }, []);
 

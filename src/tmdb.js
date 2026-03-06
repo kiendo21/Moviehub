@@ -19,23 +19,34 @@ async function get(endpoint, params = {}) {
     return res.json();
 }
 
-/** Map raw TMDB movie → app-friendly shape */
+/** List of AI-style fallback descriptions for movies without overview */
+const FALLBACK_DESCS = [
+    "Một cuộc hành trình đầy cảm xúc và những pha hành động nghẹt thở, hứa hẹn mang lại những trải nghiệm điện ảnh khó quên cho khán giả.",
+    "Khám phá những bí mật ẩn giấu và những bước ngoặt bất ngờ trong một câu chuyện đầy kịch tính và chiều sâu.",
+    "Một tác phẩm điện ảnh đỉnh cao, kết hợp hoàn hảo giữa hình ảnh mãn nhãn và nội dung sâu sắc, chạm đến trái tim người xem.",
+    "Hành trình của lòng dũng cảm và sự hy vọng trong một thế giới đầy thách thức, nơi mỗi quyết định đều mang tính quyết định.",
+    "Sự kết hợp tuyệt vời giữa nghệ thuật kể chuyện và kỹ xảo hiện đại, mang đến một làn gió mới cho dòng phim này."
+];
+
+/** Map raw TMDB movie/tv → app-friendly shape */
 export function mapMovie(m, genreMap = {}) {
+    const randomDesc = FALLBACK_DESCS[m.id % FALLBACK_DESCS.length];
     return {
         id: m.id,
-        title: m.title || m.original_title,
-        originalTitle: m.original_title || "",
-        year: (m.release_date || "").slice(0, 4),
+        title: m.title || m.name || m.original_title || m.original_name,
+        originalTitle: m.original_title || m.original_name || "",
+        year: (m.release_date || m.first_air_date || "").slice(0, 4),
         rating: Math.round((m.vote_average || 0) * 10) / 10,
         duration: m.runtime ? `${Math.floor(m.runtime / 60)}h ${m.runtime % 60}m` : "",
         genres: (m.genres || []).map((g) => g.name || genreMap[g] || "").filter(Boolean),
         genreIds: m.genre_ids || (m.genres || []).map((g) => g.id),
-        desc: m.overview || "Chưa có mô tả.",
+        desc: m.overview || randomDesc,
         thumb: poster(m.poster_path),
         backdrop: backdrop(m.backdrop_path),
         cast: [],          // filled by detail endpoint
         popularity: m.popularity || 0,
         voteCount: m.vote_count || 0,
+        mediaType: m.media_type || (m.title ? "movie" : "tv"),
     };
 }
 
@@ -52,8 +63,8 @@ export async function fetchGenres() {
     return data.genres; // [{id, name}, ...]
 }
 
-export async function fetchTrending() {
-    const data = await get("/trending/movie/week");
+export async function fetchTrending(type = "all", timeWindow = "day") {
+    const data = await get(`/trending/${type}/${timeWindow}`);
     return data.results;
 }
 
@@ -83,6 +94,7 @@ export async function fetchNowPlaying(page = 1) {
 }
 
 export async function fetchMovieDetail(id) {
+    // We try to append videos in primary language
     const data = await get(`/movie/${id}`, { append_to_response: "credits,recommendations,videos" });
     const movie = mapMovie(data);
     movie.duration = data.runtime ? `${Math.floor(data.runtime / 60)}h ${data.runtime % 60}m` : "";
@@ -100,11 +112,49 @@ export async function fetchMovieDetail(id) {
     movie.recommendations = (data.recommendations?.results || []).slice(0, 6);
 
     // Extract Trailer
-    const videos = data.videos?.results || [];
+    let videos = data.videos?.results || [];
+
+    // FALLBACK: If no videos in primary language, try En-US
+    if (videos.length === 0) {
+        try {
+            const dataEN = await get(`/movie/${id}`, { append_to_response: "videos", language: "en-US" });
+            videos = dataEN.videos?.results || [];
+        } catch (e) {
+            console.error("Trailer fallback error:", e);
+        }
+    }
+
     const trailer = videos.find(v => v.site === "YouTube" && v.type === "Trailer") || videos.find(v => v.site === "YouTube");
     movie.trailerKey = trailer ? trailer.key : null;
 
     return movie;
+}
+
+export async function fetchTVDetail(id) {
+    const data = await get(`/tv/${id}`, { append_to_response: "credits,recommendations,videos" });
+    const tv = mapMovie(data);
+
+    // TV specific mapping adjustments
+    tv.duration = data.number_of_seasons ? `${data.number_of_seasons} Mùa` : "";
+    tv.genres = (data.genres || []).map((g) => g.name);
+    // ... similarities
+
+    let videos = data.videos?.results || [];
+    if (videos.length === 0) {
+        try {
+            const dataEN = await get(`/tv/${id}`, { append_to_response: "videos", language: "en-US" });
+            videos = dataEN.videos?.results || [];
+        } catch (e) { }
+    }
+    const trailer = videos.find(v => v.site === "YouTube" && v.type === "Trailer") || videos.find(v => v.site === "YouTube");
+    tv.trailerKey = trailer ? trailer.key : null;
+    tv.mediaType = "tv";
+    return tv;
+}
+
+export async function fetchMediaDetail(id, type = "movie") {
+    if (type === "tv") return fetchTVDetail(id);
+    return fetchMovieDetail(id);
 }
 
 export async function fetchPersonMovies(personId) {
