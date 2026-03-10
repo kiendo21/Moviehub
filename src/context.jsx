@@ -22,6 +22,7 @@ export function AppProvider({ children }) {
   const [trending, setTrending] = useState([]);
   const [popular, setPopular] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [activeGlobalGenres, setActiveGlobalGenres] = useState([]); // Shared genre filter
 
   // ─── user data ────────────────────────────────────────
   const [wishlist, setWishlist] = useState([]);        // full movie objects
@@ -117,8 +118,10 @@ export function AppProvider({ children }) {
       // user
       currentUser,
       setCurrentUser,
+      activeGlobalGenres,
+      setActiveGlobalGenres,
     }),
-    [genreMap, genreList, trending, popular, loading, wishlist, currentUser, searchMovies, fetchByGenre, fetchMovieDetail, fetchTrendingDay, fetchTrendingWeek, isInWishlist, toggleWishlist]
+    [genreMap, genreList, trending, popular, loading, wishlist, currentUser, searchMovies, fetchByGenre, fetchMovieDetail, fetchTrendingDay, fetchTrendingWeek, isInWishlist, toggleWishlist, activeGlobalGenres]
   );
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;

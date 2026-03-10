@@ -6,6 +6,7 @@ import Auth from "./pages/Auth.jsx";
 import Wishlist from "./pages/Wishlist.jsx";
 import MovieDetail from "./pages/MovieDetail.jsx";
 import PersonDetail from "./pages/PersonDetail.jsx";
+import Chatbot from "./components/Chatbot.jsx";
 import { AppProvider } from "./context.jsx";
 import "./App.css";
 
@@ -68,6 +69,11 @@ export default function App() {
             />
           )}
         </main>
+        <Chatbot onNavigate={(t) => {
+          setTab(t);
+          setSelectedMovieId(null);
+          setSelectedPersonId(null);
+        }} />
       </div>
     </AppProvider>
   );

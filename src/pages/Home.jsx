@@ -110,7 +110,7 @@ export default function Home({ onGoBrowse, onGoMovie }) {
                   style={{ background: "rgba(255,255,255,0.1)", color: "#fff" }}
                   onClick={() => setIsTrailerOpen(true)}
                 >
-                  🎬 Trailer
+                  Trailer
                 </button>
               )}
               <button

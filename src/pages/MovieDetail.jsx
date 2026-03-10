@@ -160,7 +160,7 @@ export default function MovieDetail({ movieId, onGoBack, onGoMovie, onGoPerson }
                                     style={{ background: "rgba(255,255,255,0.1)", color: "#fff" }}
                                     onClick={() => setIsTrailerOpen(true)}
                                 >
-                                    🎬 Trailer
+                                    Trailer
                                 </button>
                             )}
                             <button
