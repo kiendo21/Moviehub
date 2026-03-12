@@ -48,7 +48,7 @@ export default function App() {
             />
           )}
           {tab === "browse" && (
-            <Browse onGoMovie={goToMovie} initialGenreId={initialGenreId} onGenreConsumed={() => setInitialGenreId(null)} />
+            <Browse onGoMovie={goToMovie} onGoPerson={goToPerson} initialGenreId={initialGenreId} onGenreConsumed={() => setInitialGenreId(null)} />
           )}
           {tab === "wishlist" && (
             <Wishlist onGoMovie={goToMovie} />
@@ -75,7 +75,7 @@ export default function App() {
           setTab("browse");
           setSelectedMovieId(null);
           setSelectedPersonId(null);
-        }} />
+        }} onGoMovie={goToMovie} />
       </div>
     </AppProvider>
   );

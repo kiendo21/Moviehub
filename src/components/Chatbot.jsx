@@ -1,5 +1,6 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import geminiLogo from '../assets/movies/Gemini_logo.png';
+import { useApp } from '../context.jsx';
 
 /**
  * Mood → Genre mapping
@@ -42,9 +43,48 @@ const MOOD_MAP = {
 
 const MOODS = Object.keys(MOOD_MAP);
 
-export default function Chatbot({ onNavigateGenre }) {
+export default function Chatbot({ onNavigateGenre, onGoMovie }) {
+    const { fetchByGenre } = useApp();
     const [isOpen, setIsOpen] = useState(false);
     const [selectedMood, setSelectedMood] = useState(null);
+    const [genreMovies, setGenreMovies] = useState({}); // { genreId: [movie1, movie2, movie3] }
+    const [loadingMovies, setLoadingMovies] = useState(false);
+    const messagesEndRef = useRef(null);
+
+    // Auto-scroll to bottom
+    useEffect(() => {
+        if (isOpen && messagesEndRef.current) {
+            messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
+        }
+    }, [isOpen, selectedMood, genreMovies]);
+
+    // Fetch 3 movies for each genre when mood is selected
+    useEffect(() => {
+        if (!selectedMood) {
+            setGenreMovies({});
+            return;
+        }
+
+        const genres = MOOD_MAP[selectedMood];
+        setLoadingMovies(true);
+
+        Promise.all(
+            genres.map(async (genre) => {
+                try {
+                    const data = await fetchByGenre(String(genre.id));
+                    const movies = (data.results || []).slice(0, 3);
+                    return { genreId: genre.id, movies };
+                } catch {
+                    return { genreId: genre.id, movies: [] };
+                }
+            })
+        ).then((results) => {
+            const map = {};
+            results.forEach((r) => { map[r.genreId] = r.movies; });
+            setGenreMovies(map);
+            setLoadingMovies(false);
+        });
+    }, [selectedMood, fetchByGenre]);
 
     const handleMoodClick = (mood) => {
         setSelectedMood(mood);
@@ -55,6 +95,14 @@ export default function Chatbot({ onNavigateGenre }) {
         setSelectedMood(null);
         if (onNavigateGenre) {
             onNavigateGenre(genreId);
+        }
+    };
+
+    const handleMovieClick = (movieId) => {
+        setIsOpen(false);
+        setSelectedMood(null);
+        if (onGoMovie) {
+            onGoMovie(movieId);
         }
     };
 
@@ -79,7 +127,7 @@ export default function Chatbot({ onNavigateGenre }) {
                         {/* Step 1: Ask mood */}
                         <div className="chat-bubble-wrapper model">
                             <div className="chat-bubble">
-                                Xin chào! 👋 Bạn đang cảm thấy thế nào? Hãy chọn tâm trạng để tôi gợi ý thể loại phim nhé!
+                                Xin chào! 👋 Bạn đang cảm thấy thế nào? Hãy chọn tâm trạng để tôi gợi ý phim nhé!
                             </div>
                         </div>
 
@@ -95,7 +143,7 @@ export default function Chatbot({ onNavigateGenre }) {
                             ))}
                         </div>
 
-                        {/* Step 2: Show genres based on selected mood */}
+                        {/* Step 2: Show genres + movies based on selected mood */}
                         {selectedMood && (
                             <>
                                 <div className="chat-bubble-wrapper user">
@@ -103,23 +151,44 @@ export default function Chatbot({ onNavigateGenre }) {
                                 </div>
                                 <div className="chat-bubble-wrapper model">
                                     <div className="chat-bubble">
-                                        Với tâm trạng <strong>{selectedMood}</strong>, bạn có thể thích những thể loại phim này. Bấm vào để xem ngay!
+                                        Với tâm trạng <strong>{selectedMood}</strong>, đây là những thể loại và phim đang hot mà bạn có thể thích:
                                     </div>
                                 </div>
-                                <div className="chat-chips">
-                                    {MOOD_MAP[selectedMood].map((genre) => (
+
+                                {/* Genre sections with movies */}
+                                {MOOD_MAP[selectedMood].map((genre) => (
+                                    <div key={genre.id} className="chat-genre-section">
                                         <button
-                                            key={genre.id}
-                                            className="chat-chip chat-chip--genre"
+                                            className="chat-genre-title"
                                             onClick={() => handleGenreClick(genre.id)}
                                         >
-                                            🎬 {genre.name}
+                                            🎬 {genre.name} →
                                         </button>
-                                    ))}
-                                </div>
+                                        <div className="chat-movie-row">
+                                            {loadingMovies ? (
+                                                <div className="chat-movie-loading">Đang tải...</div>
+                                            ) : (
+                                                (genreMovies[genre.id] || []).map((movie) => (
+                                                    <div
+                                                        key={movie.id}
+                                                        className="chat-movie-card"
+                                                        onClick={() => handleMovieClick(movie.id)}
+                                                    >
+                                                        {movie.thumb && (
+                                                            <img src={movie.thumb} alt={movie.title} className="chat-movie-card__img" />
+                                                        )}
+                                                        <div className="chat-movie-card__title">{movie.title}</div>
+                                                    </div>
+                                                ))
+                                            )}
+                                        </div>
+                                    </div>
+                                ))}
+
                                 <button className="chat-reset" onClick={handleReset}>← Chọn tâm trạng khác</button>
                             </>
                         )}
+                        <div ref={messagesEndRef} />
                     </div>
                 </div>
             )}

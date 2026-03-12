@@ -1,9 +1,9 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useApp } from "../context.jsx";
 import MovieCard from "../components/MovieCard.jsx";
-import { searchPerson, fetchPersonMovies, mapMovieFromList } from "../tmdb.js";
+import { searchPerson, fetchPersonMovies, mapMovieFromList, IMG } from "../tmdb.js";
 
-export default function Browse({ onGoMovie, initialGenreId, onGenreConsumed }) {
+export default function Browse({ onGoMovie, onGoPerson, initialGenreId, onGenreConsumed }) {
   const { popular, genreList, genreMap, toggleWishlist, isInWishlist, searchMovies, fetchByGenre } = useApp();
 
   const [movies, setMovies] = useState([]);
@@ -12,6 +12,7 @@ export default function Browse({ onGoMovie, initialGenreId, onGenreConsumed }) {
   const [sort, setSort] = useState("popularity");
   const [loading, setLoading] = useState(false);
   const [searchLabel, setSearchLabel] = useState("");
+  const [matchedPersons, setMatchedPersons] = useState([]);
   const debounceRef = useRef(null);
 
   // Init with popular movies
@@ -37,6 +38,7 @@ export default function Browse({ onGoMovie, initialGenreId, onGenreConsumed }) {
 
     if (!search.trim()) {
       setSearchLabel("");
+      setMatchedPersons([]);
       if (activeGenres.length === 0) {
         setMovies(popular);
       } else {
@@ -55,6 +57,7 @@ export default function Browse({ onGoMovie, initialGenreId, onGenreConsumed }) {
 
         // Also search by actor name
         const persons = await searchPerson(search);
+        setMatchedPersons(persons.slice(0, 6)); // Show top 6 matched actors
         if (persons.length > 0) {
           // Get movies for the top matched actor
           const topPerson = persons[0];
@@ -198,6 +201,36 @@ export default function Browse({ onGoMovie, initialGenreId, onGenreConsumed }) {
             </select>
           </div>
         </div>
+
+        {/* Matched Actors */}
+        {matchedPersons.length > 0 && search.trim() && (
+          <div className="actorResults">
+            <div className="actorResults__title">Diễn viên</div>
+            <div className="actorResults__list">
+              {matchedPersons.map((person) => (
+                <div
+                  key={person.id}
+                  className="actorCard"
+                  onClick={() => onGoPerson && onGoPerson(person.id)}
+                >
+                  <div className="actorCard__imgWrap">
+                    {person.profile_path ? (
+                      <img
+                        src={`${IMG}/w185${person.profile_path}`}
+                        alt={person.name}
+                        className="actorCard__img"
+                      />
+                    ) : (
+                      <div className="actorCard__placeholder">👤</div>
+                    )}
+                  </div>
+                  <div className="actorCard__name">{person.name}</div>
+                  <div className="actorCard__dept">{person.known_for_department || "Diễn viên"}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
 
         {/* Results */}
         {loading ? (

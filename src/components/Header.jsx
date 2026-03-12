@@ -10,12 +10,15 @@ export default function Header({ tab, onChangeTab }) {
           MOVIEHUB
         </div>
 
-        <div className="searchRect" onClick={() => onChangeTab("browse")} role="button">
-          <span className="searchRect__icon">⌕</span>
-          <span className="searchRect__text">Tìm kiếm phim, diễn viên...</span>
-        </div>
-
         <nav className="menuSimple">
+          <button
+            className={`headerIconBtn ${tab === "browse" ? "is-active" : ""}`}
+            onClick={() => onChangeTab("browse")}
+            title="Tìm kiếm"
+          >
+            ⌕
+          </button>
+
           <button
             className={tab === "browse" ? "is-active" : ""}
             onClick={() => onChangeTab("browse")}
