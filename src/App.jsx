@@ -14,6 +14,7 @@ export default function App() {
   const [tab, setTab] = useState("home");
   const [selectedMovieId, setSelectedMovieId] = useState(null);
   const [selectedPersonId, setSelectedPersonId] = useState(null);
+  const [initialGenreId, setInitialGenreId] = useState(null);
 
   const goToMovie = (id) => {
     setSelectedMovieId(id);
@@ -47,7 +48,7 @@ export default function App() {
             />
           )}
           {tab === "browse" && (
-            <Browse onGoMovie={goToMovie} />
+            <Browse onGoMovie={goToMovie} initialGenreId={initialGenreId} onGenreConsumed={() => setInitialGenreId(null)} />
           )}
           {tab === "wishlist" && (
             <Wishlist onGoMovie={goToMovie} />
@@ -69,8 +70,9 @@ export default function App() {
             />
           )}
         </main>
-        <Chatbot onNavigate={(t) => {
-          setTab(t);
+        <Chatbot onNavigateGenre={(genreId) => {
+          setInitialGenreId(genreId);
+          setTab("browse");
           setSelectedMovieId(null);
           setSelectedPersonId(null);
         }} />

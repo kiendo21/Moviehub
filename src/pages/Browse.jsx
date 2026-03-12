@@ -3,11 +3,12 @@ import { useApp } from "../context.jsx";
 import MovieCard from "../components/MovieCard.jsx";
 import { searchPerson, fetchPersonMovies, mapMovieFromList } from "../tmdb.js";
 
-export default function Browse({ onGoMovie }) {
-  const { popular, genreList, genreMap, toggleWishlist, isInWishlist, searchMovies, fetchByGenre, activeGlobalGenres, setActiveGlobalGenres } = useApp();
+export default function Browse({ onGoMovie, initialGenreId, onGenreConsumed }) {
+  const { popular, genreList, genreMap, toggleWishlist, isInWishlist, searchMovies, fetchByGenre } = useApp();
 
   const [movies, setMovies] = useState([]);
   const [search, setSearch] = useState("");
+  const [activeGenres, setActiveGenres] = useState([]); // Array of genre IDs
   const [sort, setSort] = useState("popularity");
   const [loading, setLoading] = useState(false);
   const [searchLabel, setSearchLabel] = useState("");
@@ -15,24 +16,31 @@ export default function Browse({ onGoMovie }) {
 
   // Init with popular movies
   useEffect(() => {
-    if (popular.length > 0 && movies.length === 0 && !search && activeGlobalGenres.length === 0) {
+    if (popular.length > 0 && movies.length === 0 && !search && activeGenres.length === 0) {
       setMovies(popular);
     }
   }, [popular]);
 
+  // Handle genre navigation from chatbot
+  useEffect(() => {
+    if (initialGenreId && genreList.length > 0) {
+      setActiveGenres([initialGenreId]);
+      setSearch("");
+      loadByGenre([initialGenreId]);
+      if (onGenreConsumed) onGenreConsumed();
+    }
+  }, [initialGenreId, genreList]);
+
   // Search with debounce — search movies AND actors
-  // Also reacts to activeGlobalGenres changes from Chatbot
   useEffect(() => {
     if (debounceRef.current) clearTimeout(debounceRef.current);
 
     if (!search.trim()) {
       setSearchLabel("");
-      if (popular.length > 0) {
-        if (activeGlobalGenres.length === 0) {
-          setMovies(popular);
-        } else {
-          loadByGenre(activeGlobalGenres);
-        }
+      if (activeGenres.length === 0) {
+        setMovies(popular);
+      } else {
+        loadByGenre(activeGenres);
       }
       return;
     }
@@ -74,7 +82,7 @@ export default function Browse({ onGoMovie }) {
     }, 500);
 
     return () => clearTimeout(debounceRef.current);
-  }, [search, activeGlobalGenres, popular, loadByGenre]);
+  }, [search]);
 
   // Genre filter
   const loadByGenre = useCallback(async (genreIds) => {
@@ -97,16 +105,16 @@ export default function Browse({ onGoMovie }) {
   const handleGenreClick = (genreId) => {
     setSearch("");
     if (genreId === 0) {
-      setActiveGlobalGenres([]);
+      setActiveGenres([]);
       setMovies(popular);
       return;
     }
 
-    const newGenres = activeGlobalGenres.includes(genreId)
-      ? activeGlobalGenres.filter((id) => id !== genreId)
-      : [...activeGlobalGenres, genreId];
+    const newGenres = activeGenres.includes(genreId)
+      ? activeGenres.filter((id) => id !== genreId)
+      : [...activeGenres, genreId];
 
-    setActiveGlobalGenres(newGenres);
+    setActiveGenres(newGenres);
     loadByGenre(newGenres);
   };
 
@@ -155,13 +163,13 @@ export default function Browse({ onGoMovie }) {
           {/* Genre filter */}
           <div className="genreFilter">
             <button
-              className={`genreFilterBtn ${activeGlobalGenres.length === 0 ? "is-active" : ""}`}
+              className={`genreFilterBtn ${activeGenres.length === 0 ? "is-active" : ""}`}
               onClick={() => handleGenreClick(0)}
             >
               Tất Cả
             </button>
             {genreList.map((g) => {
-              const isActive = activeGlobalGenres.includes(g.id);
+              const isActive = activeGenres.includes(g.id);
               return (
                 <button
                   key={g.id}
